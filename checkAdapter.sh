@@ -1,5 +1,5 @@
 #!/bin/bash
-confName=hostapd.conf
+confName=hostapdTmp.conf
 resFile=$2
 nameInterface=$1
 delay=0
@@ -48,7 +48,7 @@ testChannel(){
     else
         return 1
     fi
-    echo Channel: $i  = $(cat tmp.log) >> channels.log
+    
 }
 
 testChannels(){
@@ -62,7 +62,6 @@ testChannels(){
     json_object='{'
     for i in ${array[@]}
     do
-        echo $i
         if [[ $i == 36 ]]
         then
             setOption $confName ieee80211n 1
@@ -73,7 +72,8 @@ testChannels(){
 
         testChannel $i
         res=$?
-
+        echo Channel: $i  = $(cat tmp.log) >> channels.log
+        
         if [[ $res != 1 ]] then
             echo "Channel $i not supported">> $resFile
             json_object+="\"$i\":false,"
@@ -89,9 +89,10 @@ testChannels(){
     ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs sudo kill 2 2> /dev/null
     rm tmp.log
     rm num
+    rm $confName
     # rm channels.log
 }
 
-
+createConfig
 testChannels
 
