@@ -115,14 +115,14 @@ testHT(){
     "[VHT160-]")
         HTmode="[HT40-]"
         VHTmode=1
-        mhz=80
-        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel - 6))
+        mhz=160
+        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel - 14))
     ;;
      "[VHT160+]")
         HTmode="[HT40+]"
-        VHTmode=1
-        mhz=80
-        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel + 6))
+        VHTmode=2
+        mhz=160
+        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel + 14))
     ;;
 
     esac
@@ -142,8 +142,10 @@ testHT(){
         text=$(sudo iw dev $nameInterface info | grep "width:")
         width=$(awk '{print $6}' <<< $text)
         ch=$(awk '{print $2}' <<< $text)
-        echo "Width $width"
-        if [[ $width == $mhz ]] then
+        # echo "Width $width == mhz = $mhz"
+        if [[ $width == "$mhz" ]] then
+            echo "add [$width==$mhz]"
+            echo "add [$option ch=$ch]"
             echo -n "[$option ch=$ch]"  >> $resFile
             stopAP
             return 1
@@ -174,8 +176,8 @@ testWidth(){
     # testHT "[VHT80++2]" $channel
     # testHT "[VHT80-+0]" $channel
 
-    # testHT "[VHT160+]" $channel
-    # testHT "[VHT160-]" $channel
+    testHT "[VHT160+]" $channel
+    testHT "[VHT160-]" $channel
 
     echo >> $resFile
 }
