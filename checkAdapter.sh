@@ -21,7 +21,12 @@ createConfig(){
     confList["ssid"]=WiFiOnLinux
     confList["hw_mode"]=g
     confList["channel"]=13
-    confList["ieee80211n"]=0
+    confList["ieee80211n"]=1
+    confList["ieee80211ac"]=1
+    confList["ht_capab"]="[HT20]"
+    confList["vht_oper_chwidth"]=0
+    confList["vht_oper_centr_freq_seg0_idx"]=0
+
     echo > $confName 
     for key in "${!confList[@]}"; do
         echo "$key=${confList[$key]}" >> $confName
@@ -41,18 +46,154 @@ startAP(){
     fi
 
 }
+
+stopAP(){
+    cat hosapd.pid 2> /dev/null | sudo kill 2
+}
+
+waitScan(){
+    cnt=0
+    while true;
+    do
+        res=$(sudo iw dev $nameInterface info | grep channel)
+        # sudo iw dev $nameInterface info | grep channel
+        
+        res=$?
+        if [[ $res == 0 || $cnt == 5 ]] then
+            return
+        fi
+        sleep 1
+        cnt=$(( $cnt+1 ))
+        # echo $cnt
+    done
+}
+
 testChannel(){
     res=0
     channel=$1
 
     setOption $confName channel $channel
-    
+    setOption $confName "ht_capab" " "
+    setOption $confName "vht_oper_chwidth" 0
+    setOption $confName "ieee80211ac" 0
+    setOption $confName "vht_oper_centr_freq_seg0_idx" 0
+
+
     startAP 
-    sleep 0.1
-    res=$(grep -q "AP-ENABLED" tmp.log)
+    sleep 0.2
+    res=$(grep "AP-ENABLED" tmp.log)
     res=$?
     cat hostapd.pid 2> /dev/null | sudo kill 2
     return $res
+}
+
+testHT(){
+    option=$1
+    case "$option" in
+    "[HT40+]")
+        HTmode="[HT40+]"
+        VHTmode=0
+        mhz=40
+    ;;
+    "[HT40-]")
+        HTmode="[HT40-]"
+        VHTmode=0
+        mhz=40
+    ;;
+    "[VHT80+]")
+        HTmode="[HT40+]"
+        VHTmode=1
+        mhz=80
+        setOption $confName "vht_oper_centr_freq_seg0_idx" $channel
+    ;;
+     "[VHT80-]")
+        HTmode="[HT40-]"
+        VHTmode=1
+        mhz=80
+        setOption $confName "vht_oper_centr_freq_seg0_idx" $channel
+    ;;
+     "[VHT80++2]")
+        HTmode="[HT40+]"
+        VHTmode=1
+        mhz=80
+        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel + 2 ))
+    ;;
+     "[VHT80-+2]")
+        HTmode="[HT40-]"
+        VHTmode=1
+        mhz=80
+        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel + 2 ))
+    ;;
+      "[VHT80+-2]")
+        HTmode="[HT40+]"
+        VHTmode=1
+        mhz=80
+        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel - 2 ))
+    ;;
+     "[VHT80--2]")
+        HTmode="[HT40-]"
+        VHTmode=1
+        mhz=80
+        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel - 2 ))
+    ;;
+    "[VHT160]")
+        HTmode="[HT40+]"
+        VHTmode=2
+        mhz=160
+
+    ;;
+    esac
+
+  
+
+
+    stopAP
+    setOption $confName "ht_capab" $HTmode
+    setOption $confName "vht_oper_chwidth" $VHTmode
+    setOption $confName "ieee80211ac" 1
+    startAP
+    sleep 1
+    res=$(grep -q "AP-DISABLED" tmp.log)
+    res=$?
+    
+    if [[ $res == 1 ]] then
+        waitScan
+        text=$(sudo iw dev $nameInterface info | grep "width:")
+        width=$(awk '{print $6}' <<< $text)
+        ch=$(awk '{print $2}' <<< $text)
+        echo "Width $width"
+        if [[ $width == $mhz ]] then
+            echo -n "[$option ch=$ch]"  >> $resFile
+            stopAP
+            return 1
+        fi
+    fi
+    stopAP
+    return 0
+}
+testWidth(){
+    channel=$2
+    resFile=$1
+    echo -n "   Supported width: [HT20]" >> $resFile
+
+    testHT "[HT40+]" $channel
+    r1=$? 
+    testHT "[HT40-]" $channel
+    r2=$? 
+    if [[ $r1 == 0 && $r2 == 0 ]] then
+        echo >> $resFile
+        return 0
+    fi
+    testHT "[VHT80+]" $channel
+    testHT "[VHT80-]" $channel
+    testHT "[VHT80+-2]" $channel
+    testHT "[VHT80--2]" $channel
+    testHT "[VHT80++2]" $channel
+    testHT "[VHT80-+0]" $channel
+
+    # testHT "[VHT160]" $channel
+
+    echo >> $resFile
 }
 
 testChannels(){
@@ -66,6 +207,7 @@ testChannels(){
     json_object='{'
     for i in ${array[@]}
     do
+        echo "Channel= $i"
         if [[ $i == 36 ]]
         then
             echo "5GHZ Channel test" >> $resFile
@@ -75,14 +217,17 @@ testChannels(){
         sleep $delay
         testChannel $i
         res=$?
+        echo Channel: $i  = $(cat tmp.log) >> channels.log
         if [[ $res == 1 ]] then
             echo "Channel $i not supported">> $resFile
             json_object+="\"$i\":false,"
         else
-            echo "Channel $i supported">> $resFile
+            echo  -n "Channel $i supported">> $resFile
+            testWidth $resFile $i
             json_object+="\"$i\":true,"
         fi
-        echo Channel: $i  = $(cat tmp.log) >> channels.log
+        
+        stopAP
     done
     json_object=${json_object%,} # Удаляем последнюю запятую
     json_object+='}'
@@ -98,3 +243,4 @@ testChannels(){
 createConfig
 testChannels
 
+echo "Done"
