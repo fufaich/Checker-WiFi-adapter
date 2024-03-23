@@ -104,50 +104,31 @@ testHT(){
         HTmode="[HT40+]"
         VHTmode=1
         mhz=80
-        setOption $confName "vht_oper_centr_freq_seg0_idx" $channel
+        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel + 6))
     ;;
-     "[VHT80-]")
+    "[VHT80-]")
         HTmode="[HT40-]"
         VHTmode=1
         mhz=80
-        setOption $confName "vht_oper_centr_freq_seg0_idx" $channel
+        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel + 6))
     ;;
-     "[VHT80++2]")
-        HTmode="[HT40+]"
-        VHTmode=1
-        mhz=80
-        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel + 2 ))
-    ;;
-     "[VHT80-+2]")
+    "[VHT160-]")
         HTmode="[HT40-]"
         VHTmode=1
         mhz=80
-        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel + 2 ))
+        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel - 6))
     ;;
-      "[VHT80+-2]")
+     "[VHT160+]")
         HTmode="[HT40+]"
         VHTmode=1
         mhz=80
-        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel - 2 ))
+        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel + 6))
     ;;
-     "[VHT80--2]")
-        HTmode="[HT40-]"
-        VHTmode=1
-        mhz=80
-        setOption $confName "vht_oper_centr_freq_seg0_idx" $(( $channel - 2 ))
-    ;;
-    "[VHT160]")
-        HTmode="[HT40+]"
-        VHTmode=2
-        mhz=160
 
-    ;;
     esac
 
-  
-
-
     stopAP
+    setOption $confName "channel" $channel
     setOption $confName "ht_capab" $HTmode
     setOption $confName "vht_oper_chwidth" $VHTmode
     setOption $confName "ieee80211ac" 1
@@ -186,12 +167,15 @@ testWidth(){
     fi
     testHT "[VHT80+]" $channel
     testHT "[VHT80-]" $channel
-    testHT "[VHT80+-2]" $channel
-    testHT "[VHT80--2]" $channel
-    testHT "[VHT80++2]" $channel
-    testHT "[VHT80-+0]" $channel
 
-    # testHT "[VHT160]" $channel
+    # testHT "[VHT80-]" $channel
+    # testHT "[VHT80+-2]" $channel
+    # testHT "[VHT80--2]" $channel
+    # testHT "[VHT80++2]" $channel
+    # testHT "[VHT80-+0]" $channel
+
+    # testHT "[VHT160+]" $channel
+    # testHT "[VHT160-]" $channel
 
     echo >> $resFile
 }
