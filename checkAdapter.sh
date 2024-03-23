@@ -15,7 +15,6 @@ trap 'sigHandler' SIGINT
 
 createConfig(){
     declare -A confList
-    declare -A result
     confList["interface"]=$nameInterface
     confList["driver"]=nl80211
     confList["country_code"]=RU
@@ -31,30 +30,35 @@ createConfig(){
 setOption(){
     sed -i "s/\($2=\)\([^ ]*\)/\1$3/" $1
 }
-testChannel(){
-    channel=$1
 
-    setOption $confName channel $i
+startAP(){
     sudo hostapd -B -P hostapd.pid $confName > tmp.log
-    sleep $delay
+
     if [[ $(grep -c "kernel reports" tmp.log) -ne 0 ]]
-    then
+    then 
         ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs sudo kill 2 2> /dev/null
         sudo hostapd -B -P hostapd.pid $confName > tmp.log
     fi
-    if [[ $(grep -c "frequency not allowed" tmp.log) -ne 0 || $(grep -c "not support configured channel" tmp.log) -ne 0 ]]
-    then
-        return 0
-    else
-        return 1
-    fi
+
+}
+testChannel(){
+    res=0
+    channel=$1
+
+    setOption $confName channel $channel
     
+    startAP 
+    sleep 0.1
+    res=$(grep -q "AP-ENABLED" tmp.log)
+    res=$?
+    cat hostapd.pid 2> /dev/null | sudo kill 2
+    return $res
 }
 
 testChannels(){
     echo $(date) > channels.log
     echo $(date) > $resFile   
-
+    declare -A result
     iw phy$numPhy info | sed -n '/Band 4:/q;p' | grep 'MHz \[' | cut -d ' ' -f4 | grep -o '[0-9]*' > num
     mapfile -t array < num
 
@@ -64,23 +68,21 @@ testChannels(){
     do
         if [[ $i == 36 ]]
         then
-            setOption $confName ieee80211n 1
-            echo "ht_capab=[HT40+][SHORT-GI-20]" >> $confName
             echo "5GHZ Channel test" >> $resFile
+            setOption $confName ieee80211n 1
             setOption $confName hw_mode a
         fi
-
+        sleep $delay
         testChannel $i
         res=$?
-        echo Channel: $i  = $(cat tmp.log) >> channels.log
-        
-        if [[ $res != 1 ]] then
+        if [[ $res == 1 ]] then
             echo "Channel $i not supported">> $resFile
             json_object+="\"$i\":false,"
         else
             echo "Channel $i supported">> $resFile
             json_object+="\"$i\":true,"
         fi
+        echo Channel: $i  = $(cat tmp.log) >> channels.log
     done
     json_object=${json_object%,} # Удаляем последнюю запятую
     json_object+='}'
