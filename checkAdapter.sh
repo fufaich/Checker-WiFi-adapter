@@ -17,7 +17,6 @@ createConfig(){
     confList["hw_mode"]=$hw_mode
     confList["channel"]=$ch
     confList["driver"]=nl80211
-    confList["country_code"]=RU
     confList["ssid"]=WiFiOnLinux
 
     echo > $tmpConfig 
@@ -32,12 +31,12 @@ startStopAP(){
     hostapd -B -P $pid $tmpConfig > $tmp
 
     res=$(grep "AP-DISABLED" $tmp)
-    if [[ $res ]]; then
+    if [[ $res ]] then
             jsonObject+=" false ,"
         else
             jsonObject+=" true ,"
     fi
-
+    cat $tmp > $ch.log
     cat $pid 2> /dev/null | xargs kill 2
     rm $tmp
     rm $tmpConfig
@@ -45,7 +44,7 @@ startStopAP(){
 
 
 testChannel(){
-    if [[ $ch -gt 14 ]] ; then
+    if [[ $ch -gt 14 ]] then
         hw_mode="a"
     else
         hw_mode="g"
@@ -87,3 +86,4 @@ mainLoop
 jsonObject=${jsonObject%,} 
 jsonObject+=" }"
 echo $jsonObject > $resFile.json
+echo "Done" 
