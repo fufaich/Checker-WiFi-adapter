@@ -20,18 +20,13 @@ createConfig(){
         echo "$key=${confList[$key]}" >> $tmpConfig
     done
 
-    cat $tmpConfig >> "configs.log"
-
     unset confList
 }
 startStopAP(){
-    sleep 0.2
-    echo "StartAP" >> "configs.log"
-    echo >> "configs.log"
+    sleep $delay
     hostapd -B -P $pid $tmpConfig > $tmp
 
     res=$(grep "AP-DISABLED" $tmp)
-    cat $tmp > $ch.log
     if [[ $res ]]; then
             jsonObject+=" false ,"
         else
@@ -39,7 +34,8 @@ startStopAP(){
     fi
 
     cat $pid 2> /dev/null | xargs kill 2
-
+    rm $tmp
+    rm $tmpConfig
 }
 
 
@@ -75,10 +71,10 @@ tmpConfig=hostapdTmp.conf
 pid=hostapd.pid
 tmp="tmp.log"
 jsonObject=""
+delay=0.2
 declare -A ChannelsRes
 
 jsonObject+="{"
-echo > "configs.log"
 getChannelsArrays
 mainLoop
 
