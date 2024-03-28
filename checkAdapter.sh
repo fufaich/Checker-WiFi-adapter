@@ -1,3 +1,8 @@
+sigHandler(){
+    ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs sudo kill 2 2> /dev/null   
+    exit 0
+}
+
 getChannelsArrays(){
     numPhy=$(iw dev $nameInterface info | grep wiphy | awk '{print $2}')
     iw phy$numPhy info | sed -n '/Band 4:/q;p' | grep 'MHz \[' | grep -v "(disabled)" | cut -d ' ' -f4 | grep -o '[0-9]*' > num
@@ -73,6 +78,7 @@ tmp="tmp.log"
 jsonObject=""
 delay=0.2
 declare -A ChannelsRes
+trap 'sigHandler' SIGINT
 
 jsonObject+="{"
 getChannelsArrays
