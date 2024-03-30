@@ -1,3 +1,5 @@
+#!/bin/bash
+
 sigHandler(){
     ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs sudo kill 2 2> /dev/null   
     exit 0
@@ -31,12 +33,13 @@ startStopAP(){
     hostapd -B -P $pid $tmpConfig > $tmp
 
     res=$(grep "AP-DISABLED" $tmp)
-    if [[ $res ]] then
+    if [[ $res ]] 
+        then
             jsonObject+=" false ,"
         else
             jsonObject+=" true ,"
     fi
-    cat $tmp > $ch.log
+    # cat $tmp > $ch.log
     cat $pid 2> /dev/null | xargs kill 2
     rm $tmp
     rm $tmpConfig
@@ -44,7 +47,8 @@ startStopAP(){
 
 
 testChannel(){
-    if [[ $ch -gt 14 ]] then
+    if [[ $ch -gt 14 ]] 
+    then
         hw_mode="a"
     else
         hw_mode="g"
@@ -53,8 +57,6 @@ testChannel(){
     jsonObject+=" \"$ch\" :"
     createConfig
     startStopAP
-
-    widthsResult+=(})
 }
 
 mainLoop(){
