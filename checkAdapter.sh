@@ -50,9 +50,12 @@ testChannel(){
     if [[ $ch -gt 14 ]] 
     then
         hw_mode="a"
+#        ht_capab=("HT20" "HT40+" "HT40-")
     else
         hw_mode="g"
+#        ht_capab=("HT20" "HT40+" "HT40-")
     fi
+
 
     jsonObject+=" \"$ch\" :"
     createConfig
