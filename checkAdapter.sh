@@ -112,7 +112,7 @@ startStopAP(){
 
     # read key
 ########################################################
-    cat $tmp > "$ch-$width-$i-$center.log"
+    # cat $tmp > "$ch-$width-$i-$center.log"
 
     ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs sudo kill 2 2> /dev/null
     rm $tmp
