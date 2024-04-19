@@ -32,12 +32,23 @@ startStopAP(){
     sleep $delay
     hostapd -B -P $pid $tmpConfig > $tmp
 
-    res=$(grep "AP-DISABLED" $tmp)
+
+     while [[ true ]] 
+    do          
+        if [[ $(grep "AP-DISABLED" $tmp) || $(grep "AP-ENABLED" $tmp) ]]
+        then
+            break
+        fi
+        sleep 0.5
+    done
+
+
+    res=$(grep "AP-ENABLED" $tmp)
     if [[ $res ]] 
         then
-            jsonObject+=" false ,"
-        else
             jsonObject+=" true ,"
+        else
+            jsonObject+=" false ,"
     fi
     # cat $tmp > $ch.log
     cat $pid 2> /dev/null | xargs kill 2
@@ -50,10 +61,9 @@ testChannel(){
     if [[ $ch -gt 14 ]] 
     then
         hw_mode="a"
-#        ht_capab=("HT20" "HT40+" "HT40-")
+
     else
         hw_mode="g"
-#        ht_capab=("HT20" "HT40+" "HT40-")
     fi
 
 
@@ -63,7 +73,7 @@ testChannel(){
 }
 
 mainLoop(){
-    for ch in ${array[@]} 
+    for ch in "${array[@]}"
     do
         testChannel
     done
@@ -81,7 +91,6 @@ pid=hostapd.pid
 tmp="tmp.log"
 jsonObject=""
 delay=0.2
-declare -A ChannelsRes
 trap 'sigHandler' SIGINT
 
 jsonObject+="{"
