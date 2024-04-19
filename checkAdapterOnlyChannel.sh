@@ -30,7 +30,7 @@ createConfig(){
     then
         confList["wpa_passphrase"]=myPW1234    
         confList["op_class"]=131
-        confList["country_code"]=GB
+        confList["country_code"]=$countryCode
         confList["ieee80211d"]=1
         confList["ieee80211n"]=1
         confList["auth_algs"]=3
@@ -135,6 +135,7 @@ jsonObject=""
 delay=0.2
 trap 'sigHandler' SIGINT
 mode6GHz=0
+countryCode=$(iw reg get | grep "country" | awk '{print $2}' | tr -d ':')
 
 jsonObject+="{"
 getChannelsArrays
