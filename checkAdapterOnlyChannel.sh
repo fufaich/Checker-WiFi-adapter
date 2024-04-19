@@ -11,6 +11,11 @@ getChannelsArrays(){
     mapfile -t array < num
     rm num
 
+
+    numPhy=$(iw dev $nameInterface info | grep wiphy | awk '{print $2}')
+    iw phy$numPhy info | sed -n '/Band 4:/,${p;}' | grep 'MHz \[' | grep -v "(disabled)" | cut -d ' ' -f4 | grep -o '[0-9]*'> num
+    mapfile -t array6GHz < num
+    rm num
 }
 
 createConfig(){
@@ -20,6 +25,24 @@ createConfig(){
     confList["channel"]=$ch
     confList["driver"]=nl80211
     confList["ssid"]=WiFiOnLinux
+    
+    if [[ $mode6GHz == 1 ]]
+    then
+        confList["wpa_passphrase"]=myPW1234    
+        confList["op_class"]=131
+        confList["country_code"]=GB
+        confList["ieee80211d"]=1
+        confList["ieee80211n"]=1
+        confList["auth_algs"]=3
+        confList["wpa"]=2
+        confList["wpa_pairwise"]=CCMP
+        confList["wpa_key_mgmt"]=SAE
+        confList["ieee80211w"]=2
+        confList["wmm_enabled"]=1
+        confList["ieee80211ac"]=1
+        confList["ieee80211ax"]=1
+        confList["ieee80211ax"]=1
+    fi
 
     echo > $tmpConfig 
     for key in "${!confList[@]}"; do
@@ -30,10 +53,9 @@ createConfig(){
 }
 startStopAP(){
     sleep $delay
-    hostapd -B -P $pid $tmpConfig > $tmp
-
-
-     while [[ true ]] 
+    
+    sudo hostapd $tmpConfig > $tmp &
+    while [[ true ]] 
     do          
         if [[ $(grep "AP-DISABLED" $tmp) || $(grep "AP-ENABLED" $tmp) ]]
         then
@@ -50,21 +72,27 @@ startStopAP(){
         else
             jsonObject+=" false ,"
     fi
-    # cat $tmp > $ch.log
-    cat $pid 2> /dev/null | xargs kill 2
+    # cat $tmp > $ch-$mode6GHz.log
+    ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs sudo kill 2 2> /dev/null  
     rm $tmp
     rm $tmpConfig
 }
 
 
 testChannel(){
-    if [[ $ch -gt 14 ]] 
+    if [[ $mode6GHz == 1 ]]
     then
-        hw_mode="a"
-
+            hw_mode="a"
     else
-        hw_mode="g"
+        if [[ $ch -gt 14 ]] 
+        then
+            hw_mode="a"
+
+        else
+            hw_mode="g"
+        fi
     fi
+    
 
 
     jsonObject+=" \"$ch\" :"
@@ -73,10 +101,24 @@ testChannel(){
 }
 
 mainLoop(){
+    jsonObject+="\"2.4GHz/5GHz\" : {"
     for ch in "${array[@]}"
     do
         testChannel
     done
+    jsonObject=${jsonObject%,} 
+    jsonObject+="},"
+
+    jsonObject+="\"6GHz\" : {"
+
+    mode6GHz=1
+    for ch in "${array6GHz[@]}"
+    do
+        testChannel
+    done
+    jsonObject=${jsonObject%,} 
+    jsonObject+="}"
+    
 }
 
 
@@ -92,9 +134,12 @@ tmp="tmp.log"
 jsonObject=""
 delay=0.2
 trap 'sigHandler' SIGINT
+mode6GHz=0
 
 jsonObject+="{"
 getChannelsArrays
+ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs sudo kill 2 2> /dev/null   
+echo "Testing..." 
 mainLoop
 
 jsonObject=${jsonObject%,} 
