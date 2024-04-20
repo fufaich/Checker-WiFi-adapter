@@ -20,60 +20,47 @@ getChannelsArrays(){
 }
 
 createConfig(){
-    declare -A confList
-    confList["interface"]=$nameInterface
-    confList["hw_mode"]=$hw_mode
-    confList["channel"]=$ch
-    confList["driver"]=nl80211
-    confList["ssid"]=WiFiOnLinux
+    echo > $tmpConfig 
+    echo "interface=$nameInterface" >> $tmpConfig
+    echo "hw_mode=$hw_mode" >> $tmpConfig
+    echo "channel=$ch" >> $tmpConfig
+    echo "driver=nl80211" >> $tmpConfig
+    echo "ssid=WiFiOnLinux" >> $tmpConfig
+    echo "noscan=1" >> $tmpConfig
     
     if [[ $mode6GHz == 1 ]]
     then
-        confList["wpa_passphrase"]=myPW1234    
-        confList["op_class"]=131
-        confList["country_code"]=$countryCode
-        confList["ieee80211d"]=1
-        confList["ieee80211n"]=1
-        confList["auth_algs"]=3
-        confList["wpa"]=2
-        confList["wpa_pairwise"]=CCMP
-        confList["wpa_key_mgmt"]=SAE
-        confList["ieee80211w"]=2
-        confList["wmm_enabled"]=1
-        confList["ieee80211ac"]=1
-        confList["ieee80211ax"]=1
-        confList["ieee80211ax"]=1
+        echo "wpa_passphrase=myPW1234" >> $tmpConfig  
+        echo "op_class=131" >> $tmpConfig
+        echo "country_code=$countryCode" >> $tmpConfig
+        echo "ieee80211d=1" >> $tmpConfig
+        echo "ieee80211n=1" >> $tmpConfig
+        echo "auth_algs=3" >> $tmpConfig
+        echo "wpa=2" >> $tmpConfig
+        echo "wpa_pairwise=CCMP" >> $tmpConfig
+        echo "wpa_key_mgmt=SAE" >> $tmpConfig
+        echo "ieee80211w=2" >> $tmpConfig
+        echo "wmm_enabled=1" >> $tmpConfig
+        echo "ieee80211ac=1" >> $tmpConfig
+        echo "ieee80211ax=1" >> $tmpConfig
+        echo "ieee80211ax=1" >> $tmpConfig
     fi
 
-    echo > $tmpConfig 
-    for key in "${!confList[@]}"; do
-        echo "$key=${confList[$key]}" >> $tmpConfig
-    done
-
-    unset confList
 }
-startStopAP(){
-    sleep $delay
-    
+startAP(){
     hostapd $tmpConfig > $tmp &
-    # while [[ true ]] 
-    # do          
-    #     if [[ $(grep "AP-DISABLED" $tmp) || $(grep "AP-ENABLED" $tmp) ]]
-    #     then
-    #         break
-    #     fi
-    #     sleep 0.5
-    # done
+    while [[ true ]] 
+    do          
+        if [[ $(grep "AP-DISABLED" $tmp) || $(grep "AP-ENABLED" $tmp) ]]
+        then
+            break
+        fi
+        sleep 0.5
+    done
+}
 
+stopAP(){
 
-    # res=$(grep "AP-ENABLED" $tmp)
-    # if [[ $res ]] 
-    #     then
-    #         echo " true"
-    #     else
-    #         jsonObject+=" false ,"
-    # fi
-    # cat $tmp > $ch-$mode6GHz.log
 
 
 
@@ -82,8 +69,44 @@ startStopAP(){
     rm $tmpConfig
 }
 
+test20MHz(){
+    echo "test20MHz"
+    createConfig
+    startAP
+    
+
+    res=$(grep "AP-ENABLED" $tmp)
+    if [[ $res ]] 
+        then
+            echo "20MHz[$ch] true"
+        else
+            echo "20MHz[$ch] false"
+    fi
+
+    cat $tmp > $ch-$mode6GHz.log
+    stopAP 
+}
+
+test40MHz(){
+    echo "test40MHz"
+}
+
+test80MHz(){
+    centers80=("42" "58" "106" "122" "138" "155" "171")
+    echo "test80MHz"
+}
+
+test160MHz(){
+    centers160=("50" "114" "163")
+    echo "test160MHz"
+}
+
+
 
 testChannel(){
+    sleep $delay
+    echo "Ch=$ch"
+
     if [[ $mode6GHz == 1 ]]
     then
             hw_mode="a"
@@ -96,10 +119,39 @@ testChannel(){
             hw_mode="g"
         fi
     fi
+
+    test20MHz
+    # test40MHz
+    # test80MHz
+    # test160MHz
+}
+
+jsonWritter(){
+
     
 
-    createConfig
-    startStopAP
+    case $1 in
+        "start")
+            declare -A array24
+            declare -A array5
+            declare -A array6
+            json_object="{ "
+        ;;
+
+        "addCh")
+            json_object+="\"$ch\": "
+        ;;
+
+        "end")
+            echo "}" >> "$resFile"
+        
+        ;;
+
+        \?)
+            echo "Invalid option: -$OPTARG" >&2
+            exit 1
+        ;;
+    esac
 }
 
 mainLoop(){
@@ -204,7 +256,7 @@ shift $((OPTIND-1))
 trap 'sigHandler' SIGINT
 nameInterface=$1
 resFile=$2
-
+delay=0.2
 checkInterface $nameInterface
 
 
@@ -216,7 +268,10 @@ countryCode=$(iw reg get | grep "country" | awk '{print $2}' | tr -d ':')
 getChannelsArrays
 ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null   
 echo "Testing..." 
-# mainLoop
+mainLoop
+# jsonWritter "start"
+# jsonWritter "end"
+
 
 # jsonObject=${jsonObject%,} Удаляет последнюю запятую
 echo "Done" 
