@@ -31,7 +31,6 @@ createConfig(){
     if [[ $mode6GHz == 1 ]]
     then
         echo "wpa_passphrase=myPW1234" >> $tmpConfig  
-        echo "op_class=131" >> $tmpConfig
         echo "country_code=$countryCode" >> $tmpConfig
         echo "ieee80211d=1" >> $tmpConfig
         echo "ieee80211n=1" >> $tmpConfig
@@ -44,48 +43,104 @@ createConfig(){
         echo "ieee80211ac=1" >> $tmpConfig
         echo "ieee80211ax=1" >> $tmpConfig
         echo "ieee80211ax=1" >> $tmpConfig
+
+        case "$1" in
+            "HT20")
+                echo "op_class=131" >> $tmpConfig
+            ;;
+            "HT40+")
+                echo "op_class=131" >> $tmpConfig
+                echo "ht_capab=[HT40+]" >> $tmpConfig
+            ;;
+            "HT40-")
+                echo "op_class=131" >> $tmpConfig
+                echo "ht_capab=[HT40-]" >> $tmpConfig
+            ;;
+             "HT80+")
+                echo "op_class=132" >> $tmpConfig
+                echo "ht_capab=[HT40+]" >> $tmpConfig
+                echo "he_oper_chwidth=2" >> $tmpConfig
+                echo "he_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
+
+            ;;
+            "HT80-")
+                echo "op_class=132" >> $tmpConfig
+                echo "ht_capab=[HT40+]" >> $tmpConfig
+                echo "he_oper_chwidth=2" >> $tmpConfig
+                echo "he_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
+            ;;
+            "HT160+")
+                echo "op_class=134" >> $tmpConfig
+                echo "ht_capab=[HT40+]" >> $tmpConfig
+                echo "he_oper_chwidth=2" >> $tmpConfig
+                echo "he_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
+
+            ;;
+            "HT1600-")
+                echo "op_class=134" >> $tmpConfig
+                echo "ht_capab=[HT40+]" >> $tmpConfig
+                echo "he_oper_chwidth=2" >> $tmpConfig
+                echo "he_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
+            ;;
+        esac
+    else
+        case "$1" in
+            "HT20")
+            :
+            ;;
+            "HT40+")
+                echo "ht_capab=[HT40+]" >> $tmpConfig
+                echo "ieee80211n=1" >> $tmpConfig
+            ;;
+            "HT40-")
+                echo "ht_capab=[HT40-]" >> $tmpConfig
+                echo "ieee80211n=1" >> $tmpConfig
+            ;;
+            "HT80+")
+                echo "ht_capab=[HT40+]" >> $tmpConfig
+                echo "ieee80211n=1" >> $tmpConfig
+                echo "ieee80211ac=1" >> $tmpConfig
+                echo "vht_oper_chwidth=1" >> $tmpConfig
+                echo "vht_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
+            ;;
+            "HT80-")
+                echo "ht_capab=[HT40-]" >> $tmpConfig
+                echo "ieee80211n=1" >> $tmpConfig
+                echo "ieee80211ac=1" >> $tmpConfig
+                echo "vht_oper_chwidth=1" >> $tmpConfig
+                echo "vht_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
+            ;;
+            "HT160+")
+                echo "ht_capab=[HT40+]" >> $tmpConfig
+                echo "ieee80211n=1" >> $tmpConfig
+                echo "ieee80211ac=1" >> $tmpConfig
+                echo "vht_oper_chwidth=2" >> $tmpConfig
+                echo "vht_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
+            ;;
+            "HT160-")
+                echo "ht_capab=[HT40-]" >> $tmpConfig
+                echo "ieee80211n=1" >> $tmpConfig
+                echo "ieee80211ac=1" >> $tmpConfig
+                echo "vht_oper_chwidth=2" >> $tmpConfig
+                echo "vht_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
+            ;;
+        esac
     fi
 
-    case "$1" in
-     "HT20")
-        :
-    ;;
-    "HT40+")
-        echo "ht_capab=[HT40+]" >> $tmpConfig
-        echo "ieee80211n=1" >> $tmpConfig
-    ;;
-    "HT40-")
-        echo "ht_capab=[HT40-]" >> $tmpConfig
-        echo "ieee80211n=1" >> $tmpConfig
-    ;;
-    "HT80+")
-        echo "ht_capab=[HT40+]" >> $tmpConfig
-        echo "ieee80211n=1" >> $tmpConfig
-        echo "ieee80211ac=1" >> $tmpConfig
-        echo "vht_oper_chwidth=1" >> $tmpConfig
-        echo "vht_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
-    ;;
-    "HT80-")
-        echo "ht_capab=[HT40-]" >> $tmpConfig
-        echo "ieee80211n=1" >> $tmpConfig
-        echo "ieee80211ac=1" >> $tmpConfig
-        echo "vht_oper_chwidth=1" >> $tmpConfig
-        echo "vht_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
-
-
-    ;;
-    esac
+   
 
 }
 startAP(){
-    
+    local timer=0
+    ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null   
     hostapd $tmpConfig > $tmp &
     while [[ true ]] 
     do          
-        if [[ $(grep "AP-DISABLED" $tmp) || $(grep "AP-ENABLED" $tmp) ]]
+        if [[ $(grep "AP-DISABLED" $tmp) || $(grep "AP-ENABLED" $tmp) || $(grep "could not get valid channel" $tmp) ]]
         then
             break
         fi
+        timer=$(($timer + 1))
         sleep 0.5
     done
 }
@@ -104,12 +159,16 @@ test20MHz(){
     if [[ $res ]] 
         then
             echo "HT20[$ch] true"
+            stopAP 
+            return 1
         else
             echo "HT20[$ch] false"
+            stopAP 
+            return 0
     fi
 
     # cat $tmp > $ch-20MHz-$mode6GHz.log
-    stopAP 
+
 }
 
 test40MHz(){
@@ -135,8 +194,12 @@ test40MHz(){
 
 test80MHz(){
     ht=("HT80+" "HT80-")
-    centers80MHz=("42" "58" "106" "122" "138" "155" "171")
-
+    if [[ $mode6GHz == 1 ]]
+    then
+        centers80MHz=("7" "23" "39" "55" "71" "87" "103" "119" "135" "151" "167" "183" "199" "215")
+    else
+        centers80MHz=("42" "58" "106" "122" "138" "155" "171")
+    fi
 
     for wdt in "${ht[@]}"
     do
@@ -149,13 +212,11 @@ test80MHz(){
             if [[ $res ]] 
                 then
                     echo "channel= $ch 80MHz centr $centrWidth false"
-                    cat $tmp > "$ch-$wdt-$centers80MHz-$mode6GHz.log"
                     stopAP
                     continue
             fi
 
             ch_width_center=$(sudo iw dev "$nameInterface" info | grep "channel")
-
             RealCh=$(echo "$ch_width_center" | awk -F'[ (]' '{print $2}')
             RealWidth=$(echo "$ch_width_center" | awk '{print $6}')
             RealCenter=$(echo "$ch_width_center" | grep -oP 'center1: \K\d+(?= MHz)')
@@ -163,54 +224,56 @@ test80MHz(){
             if [[ "$ch" == "$RealCh" && "80" == "$RealWidth" ]]
             then
                 echo "channel= $ch | $RealCh  width= $RealWidth | 80MHz centr= $RealCenter true"
-            else
-                # echo "channel= $ch | $RealCh  width= $RealWidth | 80MHz centr= $RealCenter false"
-                :
+                break
             fi
 
-            cat $tmp > "$ch-$wdt-$mode6GHz.log"
             stopAP
         done
     done
-
-
 }
 
 test160MHz(){
-    ht=("50" "114" "163")
+    ht=("HT160+" "HT160-")
 
-    for wdt in "${ht[@]}"
+    if [[ $mode6GHz == 1 ]]
+    then
+        centers160MHz=("15" "47" "79" "111" "143" "175" "207")
+    else
+        centers160MHz=("50" "114" "163")
+
+    fi
+
+
+   for wdt in "${ht[@]}"
     do
-        createConfig "$wdt"
-        startAP
+        for centrWidth in "${centers160MHz[@]}"
+        do
+            createConfig "$wdt"
+            startAP
 
-        res=$(grep "AP-ENABLED" $tmp)
-        if [[ $res ]] 
+            res=$(grep "AP-DISABLED" $tmp)
+            if [[ $res ]] 
+                then
+                    echo "channel= $ch 80MHz centr $centrWidth false"
+                    # cat $tmp > "$ch-$wdt-$centrWidth-$mode6GHz.log"
+                    stopAP
+                    continue
+            fi
+
+            ch_width_center=$(sudo iw dev "$nameInterface" info | grep "channel")
+            RealCh=$(echo "$ch_width_center" | awk -F'[ (]' '{print $2}')
+            RealWidth=$(echo "$ch_width_center" | awk '{print $6}')
+            RealCenter=$(echo "$ch_width_center" | grep -oP 'center1: \K\d+(?= MHz)')
+
+            if [[ "$ch" == "$RealCh" && "160" == "$RealWidth" ]]
             then
-                echo "$wdt-[$ch] true"
-            else
-                echo "$wdt-[$ch] false"
-        fi
+                echo "channel= $ch | $RealCh  width= $RealWidth | 160 MHz centr= $RealCenter true"
+            fi
 
-        ch_width_center=$(sudo iw dev "$nameInterface" info | grep "channel")
-
-        RealCh=$(echo "$ch_width_center" | awk -F'[ (]' '{print $2}')
-        RealWidth=$(echo "$ch_width_center" | awk '{print $6}')
-        RealCenter=$(echo "$ch_width_center" | grep -oP 'center1: \K\d+(?= MHz)')
-
-        if [[ "$ch" == "$RealCh" && "80" == "$RealWidth" ]]
-        then
-            echo "channel= $ch | $RealCh  width= $RealWidth | $ExpectedWidthMhz centr= $RealCenter true"
-        else
-            echo "channel= $ch | $RealCh  width= $RealWidth | $ExpectedWidthMhz centr= $RealCenter false"
-        fi
-
-        cat $tmp > "$ch-$wdt-$mode6GHz.log"
-        stopAP
+            # cat $tmp > "$ch-$wdt-$mode6GHz.log"
+            stopAP
+        done
     done
-
-
-
 }
 
 
@@ -221,19 +284,28 @@ testChannel(){
     if [[ $mode6GHz == 1 ]]
     then
             hw_mode="a"
+            test20MHz
+            if [[ $? == 1 ]]
+            then
+                test40MHz
+                test80MHz
+                test160MHz
+            fi
     else
         if [[ $ch -gt 14 ]] 
         then
             hw_mode="a"
-            # test20MHz
-            # test40MHz
-            test80MHz
-            # test160MHz
-
+            test20MHz
+            if [[ $? == 1 ]]
+            then
+                test40MHz
+                test80MHz
+                test160MHz
+            fi
         else
             hw_mode="g"
-            # test20MHz
-            # test40MHz
+            test20MHz
+            test40MHz
         fi
     fi
 
@@ -269,10 +341,10 @@ jsonWritter(){
 }
 
 mainLoop(){
-    for ch in "${array[@]}"
-    do
-        testChannel
-    done
+    # for ch in "${array[@]}"
+    # do
+    #     testChannel
+    # done
 
     if [ $check6GHz ]
     then
