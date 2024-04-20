@@ -55,24 +55,27 @@ startStopAP(){
     sleep $delay
     
     hostapd $tmpConfig > $tmp &
-    while [[ true ]] 
-    do          
-        if [[ $(grep "AP-DISABLED" $tmp) || $(grep "AP-ENABLED" $tmp) ]]
-        then
-            break
-        fi
-        sleep 0.5
-    done
+    # while [[ true ]] 
+    # do          
+    #     if [[ $(grep "AP-DISABLED" $tmp) || $(grep "AP-ENABLED" $tmp) ]]
+    #     then
+    #         break
+    #     fi
+    #     sleep 0.5
+    # done
 
 
-    res=$(grep "AP-ENABLED" $tmp)
-    if [[ $res ]] 
-        then
-            jsonObject+=" true ,"
-        else
-            jsonObject+=" false ,"
-    fi
+    # res=$(grep "AP-ENABLED" $tmp)
+    # if [[ $res ]] 
+    #     then
+    #         echo " true"
+    #     else
+    #         jsonObject+=" false ,"
+    # fi
     # cat $tmp > $ch-$mode6GHz.log
+
+
+
     ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null  
     rm $tmp
     rm $tmpConfig
@@ -94,31 +97,21 @@ testChannel(){
     fi
     
 
-
-    jsonObject+=" \"$ch\" :"
     createConfig
     startStopAP
 }
 
 mainLoop(){
-    jsonObject+="\"2.4GHz/5GHz\" : {"
     for ch in "${array[@]}"
     do
         testChannel
     done
-    jsonObject=${jsonObject%,} 
-    jsonObject+="},"
-
-    jsonObject+="\"6GHz\" : {"
 
     mode6GHz=1
     for ch in "${array6GHz[@]}"
     do
         testChannel
     done
-    jsonObject=${jsonObject%,} 
-    jsonObject+="}"
-    
 }
 
 checkRoot(){
@@ -130,26 +123,53 @@ checkRoot(){
 }
 
 checkParams(){
+    # Флаги по умолчанию
+    check6GHz=false
+
+    # Цикл обработки флагов
+    while getopts ":6h" opt
+    do
+        case $opt in
+            6)
+            check6GHz=true
+            ;;
+
+            h)
+            echo "Command [-6h] <interface> <file>"
+            echo "-6 add check on 6GHz"
+            echo "-h show this usage"
+            exit 0
+            ;;
+
+            \?)
+            echo "Invalid option: -$OPTARG" >&2
+            exit 1
+            ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
     if [ "$#" -ne 2 ]
     then
         echo "Required 2 arguments."
         echo "Command <interface> <filename>"
         exit 1
     fi
+
 }
 
 
 ############################################################
 checkRoot
 checkParams "$@"
+shift $((OPTIND-1))
+trap 'sigHandler' SIGINT
+echo $check6GHz
 nameInterface=$1
 resFile=$2
+
 tmpConfig=hostapdTmp.conf
-pid=hostapd.pid
 tmp="tmp.log"
-jsonObject=""
-delay=0.2
-trap 'sigHandler' SIGINT
 mode6GHz=0
 countryCode=$(iw reg get | grep "country" | awk '{print $2}' | tr -d ':')
 
