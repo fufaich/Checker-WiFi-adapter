@@ -1,7 +1,7 @@
 #!/bin/bash
 
 sigHandler(){
-    ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs sudo kill 2 2> /dev/null   
+    ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null   
     exit 0
 }
 
@@ -54,7 +54,7 @@ createConfig(){
 startStopAP(){
     sleep $delay
     
-    sudo hostapd $tmpConfig > $tmp &
+    hostapd $tmpConfig > $tmp &
     while [[ true ]] 
     do          
         if [[ $(grep "AP-DISABLED" $tmp) || $(grep "AP-ENABLED" $tmp) ]]
@@ -73,7 +73,7 @@ startStopAP(){
             jsonObject+=" false ,"
     fi
     # cat $tmp > $ch-$mode6GHz.log
-    ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs sudo kill 2 2> /dev/null  
+    ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null  
     rm $tmp
     rm $tmpConfig
 }
@@ -121,11 +121,27 @@ mainLoop(){
     
 }
 
+checkRoot(){
+    if [ "$EUID" -ne 0 ]
+    then
+        echo "Please run this script as root or use sudo."
+        exit 1
+    fi
+}
 
-
+checkParams(){
+    if [ "$#" -ne 2 ]
+    then
+        echo "Required 2 arguments."
+        echo "Command <interface> <filename>"
+        exit 1
+    fi
+}
 
 
 ############################################################
+checkRoot
+checkParams "$@"
 nameInterface=$1
 resFile=$2
 tmpConfig=hostapdTmp.conf
@@ -137,13 +153,10 @@ trap 'sigHandler' SIGINT
 mode6GHz=0
 countryCode=$(iw reg get | grep "country" | awk '{print $2}' | tr -d ':')
 
-jsonObject+="{"
 getChannelsArrays
-ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs sudo kill 2 2> /dev/null   
+ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null   
 echo "Testing..." 
-mainLoop
+# mainLoop
 
-jsonObject=${jsonObject%,} 
-jsonObject+=" }"
-echo $jsonObject > $resFile.json
+# jsonObject=${jsonObject%,} Удаляет последнюю запятую
 echo "Done" 
