@@ -6,16 +6,17 @@ sigHandler(){
 }
 
 getChannelsArrays(){
-    numPhy=$(iw dev $nameInterface info | grep wiphy | awk '{print $2}')
     iw phy$numPhy info | sed -n '/Band 4:/q;p' | grep 'MHz \[' | grep -v "(disabled)" | cut -d ' ' -f4 | grep -o '[0-9]*' > num
     mapfile -t array < num
     rm num
 
-
-    numPhy=$(iw dev $nameInterface info | grep wiphy | awk '{print $2}')
-    iw phy$numPhy info | sed -n '/Band 4:/,${p;}' | grep 'MHz \[' | grep -v "(disabled)" | cut -d ' ' -f4 | grep -o '[0-9]*'> num
-    mapfile -t array6GHz < num
-    rm num
+    if [ $check6GHz ]
+    then
+        iw phy$numPhy info | sed -n '/Band 4:/,${p;}' | grep 'MHz \[' | grep -v "(disabled)" | cut -d ' ' -f4 | grep -o '[0-9]*'> num
+        mapfile -t array6GHz < num
+        rm num
+    fi
+    
 }
 
 createConfig(){
@@ -107,11 +108,14 @@ mainLoop(){
         testChannel
     done
 
-    mode6GHz=1
-    for ch in "${array6GHz[@]}"
-    do
-        testChannel
-    done
+    if [ $check6GHz ]
+    then
+        mode6GHz=1
+        for ch in "${array6GHz[@]}"
+        do
+            testChannel
+        done
+    fi
 }
 
 checkRoot(){
@@ -158,15 +162,51 @@ checkParams(){
 
 }
 
+checkInterface(){
+    iw dev "$1" info 2> /dev/null > /dev/null
+    
+    if [ $? -ne 0 ]
+    then
+        echo "checkInterface error"
+        echo "Please check interface name"
+
+        exit 1
+    fi
+    numPhy=$(iw dev $1 info 2> /dev/null | grep wiphy | awk '{print $2}')
+
+    str=$(rfkill | grep "phy$numPhy")
+    if [ $? -ne 0 ]
+    then
+        echo "checkInterface error"
+        echo "Please check interface name"
+
+        exit 1
+    fi
+
+    rfId=$(echo "$str" | awk '{print $1}')
+    if [[ $(echo "$str" | awk '{print $4}') != "unblocked" ]]
+    then
+        echo "Unblock interface"
+        rfkill unblock "$rfId"
+    fi
+
+    if [[ $(echo "$str" | awk '{print $5}') != "unblocked" ]]
+    then
+        echo "Interface hard blocked"
+        exit 1
+    fi
+}
 
 ############################################################
 checkRoot
 checkParams "$@"
 shift $((OPTIND-1))
 trap 'sigHandler' SIGINT
-echo $check6GHz
 nameInterface=$1
 resFile=$2
+
+checkInterface $nameInterface
+
 
 tmpConfig=hostapdTmp.conf
 tmp="tmp.log"
