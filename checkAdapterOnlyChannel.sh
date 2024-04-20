@@ -46,8 +46,39 @@ createConfig(){
         echo "ieee80211ax=1" >> $tmpConfig
     fi
 
+    case "$1" in
+     "HT20")
+        :
+    ;;
+    "HT40+")
+        echo "ht_capab=[HT40+]" >> $tmpConfig
+        echo "ieee80211n=1" >> $tmpConfig
+    ;;
+    "HT40-")
+        echo "ht_capab=[HT40-]" >> $tmpConfig
+        echo "ieee80211n=1" >> $tmpConfig
+    ;;
+    "HT80+")
+        echo "ht_capab=[HT40+]" >> $tmpConfig
+        echo "ieee80211n=1" >> $tmpConfig
+        echo "ieee80211ac=1" >> $tmpConfig
+        echo "vht_oper_chwidth=1" >> $tmpConfig
+        echo "vht_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
+    ;;
+    "HT80-")
+        echo "ht_capab=[HT40-]" >> $tmpConfig
+        echo "ieee80211n=1" >> $tmpConfig
+        echo "ieee80211ac=1" >> $tmpConfig
+        echo "vht_oper_chwidth=1" >> $tmpConfig
+        echo "vht_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
+
+
+    ;;
+    esac
+
 }
 startAP(){
+    
     hostapd $tmpConfig > $tmp &
     while [[ true ]] 
     do          
@@ -60,52 +91,132 @@ startAP(){
 }
 
 stopAP(){
-
-
-
-
     ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null  
     rm $tmp
     rm $tmpConfig
 }
 
 test20MHz(){
-    echo "test20MHz"
-    createConfig
+    createConfig "HT20"
     startAP
-    
 
     res=$(grep "AP-ENABLED" $tmp)
     if [[ $res ]] 
         then
-            echo "20MHz[$ch] true"
+            echo "HT20[$ch] true"
         else
-            echo "20MHz[$ch] false"
+            echo "HT20[$ch] false"
     fi
 
-    cat $tmp > $ch-$mode6GHz.log
+    # cat $tmp > $ch-20MHz-$mode6GHz.log
     stopAP 
 }
 
 test40MHz(){
-    echo "test40MHz"
+    
+    ht=("HT40+" "HT40-")
+
+    for wdt in "${ht[@]}"
+    do
+        createConfig "$wdt"
+        startAP
+
+        res=$(grep "AP-ENABLED" $tmp)
+        if [[ $res ]] 
+            then
+                echo "$wdt-[$ch] true"
+            else
+                echo "$wdt-[$ch] false"
+        fi
+        # cat $tmp > "$ch-$wdt-$mode6GHz.log"
+        stopAP
+    done
 }
 
 test80MHz(){
-    centers80=("42" "58" "106" "122" "138" "155" "171")
-    echo "test80MHz"
+    ht=("HT80+" "HT80-")
+    centers80MHz=("42" "58" "106" "122" "138" "155" "171")
+
+
+    for wdt in "${ht[@]}"
+    do
+        for centrWidth in "${centers80MHz[@]}"
+        do
+            createConfig "$wdt"
+            startAP
+
+            res=$(grep "AP-DISABLED" $tmp)
+            if [[ $res ]] 
+                then
+                    echo "channel= $ch 80MHz centr $centrWidth false"
+                    cat $tmp > "$ch-$wdt-$centers80MHz-$mode6GHz.log"
+                    stopAP
+                    continue
+            fi
+
+            ch_width_center=$(sudo iw dev "$nameInterface" info | grep "channel")
+
+            RealCh=$(echo "$ch_width_center" | awk -F'[ (]' '{print $2}')
+            RealWidth=$(echo "$ch_width_center" | awk '{print $6}')
+            RealCenter=$(echo "$ch_width_center" | grep -oP 'center1: \K\d+(?= MHz)')
+
+            if [[ "$ch" == "$RealCh" && "80" == "$RealWidth" ]]
+            then
+                echo "channel= $ch | $RealCh  width= $RealWidth | 80MHz centr= $RealCenter true"
+            else
+                # echo "channel= $ch | $RealCh  width= $RealWidth | 80MHz centr= $RealCenter false"
+                :
+            fi
+
+            cat $tmp > "$ch-$wdt-$mode6GHz.log"
+            stopAP
+        done
+    done
+
+
 }
 
 test160MHz(){
-    centers160=("50" "114" "163")
-    echo "test160MHz"
+    ht=("50" "114" "163")
+
+    for wdt in "${ht[@]}"
+    do
+        createConfig "$wdt"
+        startAP
+
+        res=$(grep "AP-ENABLED" $tmp)
+        if [[ $res ]] 
+            then
+                echo "$wdt-[$ch] true"
+            else
+                echo "$wdt-[$ch] false"
+        fi
+
+        ch_width_center=$(sudo iw dev "$nameInterface" info | grep "channel")
+
+        RealCh=$(echo "$ch_width_center" | awk -F'[ (]' '{print $2}')
+        RealWidth=$(echo "$ch_width_center" | awk '{print $6}')
+        RealCenter=$(echo "$ch_width_center" | grep -oP 'center1: \K\d+(?= MHz)')
+
+        if [[ "$ch" == "$RealCh" && "80" == "$RealWidth" ]]
+        then
+            echo "channel= $ch | $RealCh  width= $RealWidth | $ExpectedWidthMhz centr= $RealCenter true"
+        else
+            echo "channel= $ch | $RealCh  width= $RealWidth | $ExpectedWidthMhz centr= $RealCenter false"
+        fi
+
+        cat $tmp > "$ch-$wdt-$mode6GHz.log"
+        stopAP
+    done
+
+
+
 }
 
 
 
 testChannel(){
     sleep $delay
-    echo "Ch=$ch"
 
     if [[ $mode6GHz == 1 ]]
     then
@@ -114,16 +225,19 @@ testChannel(){
         if [[ $ch -gt 14 ]] 
         then
             hw_mode="a"
+            # test20MHz
+            # test40MHz
+            test80MHz
+            # test160MHz
 
         else
             hw_mode="g"
+            # test20MHz
+            # test40MHz
         fi
     fi
 
-    test20MHz
-    # test40MHz
-    # test80MHz
-    # test160MHz
+    
 }
 
 jsonWritter(){
