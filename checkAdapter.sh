@@ -2,6 +2,9 @@
 
 sigHandler(){
     ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null   
+    rm num
+    rm $tmp
+    rm $tmpConfig
     exit 0
 }
 
