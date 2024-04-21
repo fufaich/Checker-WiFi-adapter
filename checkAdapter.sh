@@ -127,8 +127,6 @@ createConfig(){
         esac
     fi
 
-   
-
 }
 startAP(){
     local timer=0
@@ -156,17 +154,15 @@ test20MHz(){
     startAP
 
     res=$(grep "AP-ENABLED" $tmp)
-    # cat $tmp > $ch-20MHz-$mode6GHz.log
 
     if [[ $res ]] 
         then
-            echo "HT20[$ch] true"
+            $debug && echo "HT20[$ch] true"
             json_writer "$resFile" "add_element" $ch "HT20" true
-
             stopAP 
             return 1
         else
-            echo "HT20[$ch] false"
+            $debug && echo "HT20[$ch] false"
             json_writer "$resFile" "add_element" $ch "HT20" false
             stopAP 
             return 0
@@ -187,11 +183,11 @@ test40MHz(){
         res=$(grep "AP-ENABLED" $tmp)
         if [[ $res ]] 
             then
-                echo "$wdt-[$ch] true"
+                $debug && echo "$wdt-[$ch] true"
                 json_writer "$resFile" "add_element" "$ch" "$wdt" true
 
             else
-                echo "$wdt-[$ch] false"
+                $debug && echo "$wdt-[$ch] false"
                 json_writer "$resFile" "add_element" "$ch" "$wdt" false
 
         fi
@@ -219,7 +215,7 @@ test80MHz(){
             res=$(grep "AP-DISABLED" $tmp)
             if [[ $res ]] 
                 then
-                    echo "channel= $ch 80MHz centr $centrWidth false"
+                    $debug && echo "channel= $ch 80MHz centr $centrWidth false"
                     json_writer "$resFile" "add_element" "$ch" "$wdt" false
 
                     stopAP
@@ -233,14 +229,14 @@ test80MHz(){
 
             if [[ "$ch" == "$RealCh" && "80" == "$RealWidth" ]]
             then
-                echo "channel= $ch | $RealCh  width= $RealWidth | 80MHz centr= $RealCenter true"
+                $debug && echo "channel= $ch | $RealCh  width= $RealWidth | 80MHz centr= $RealCenter true"
                 json_writer "$resFile" "add_element" "$ch" "$wdt" "$RealCenter"
                 break
             else
                 json_writer "$resFile" "add_element" "$ch" "$wdt" false
+                $debug && echo "channel= $ch | $RealCh  width= $RealWidth | 80MHz centr= $RealCenter false"
 
             fi
-
             stopAP
         done
     done
@@ -257,7 +253,6 @@ test160MHz(){
 
     fi
 
-
    for wdt in "${ht[@]}"
     do
         for centrWidth in "${centers160MHz[@]}"
@@ -268,7 +263,7 @@ test160MHz(){
             res=$(grep "AP-DISABLED" $tmp)
             if [[ $res ]] 
                 then
-                    echo "channel= $ch 160MHz centr $centrWidth false"
+                    $debug && echo "channel= $ch 160MHz centr $centrWidth false"
                     json_writer "$resFile" "add_element" "$ch" "$wdt" false
                     stopAP
                     continue
@@ -281,20 +276,18 @@ test160MHz(){
 
             if [[ "$ch" == "$RealCh" && "160" == "$RealWidth" ]]
             then
-                echo "channel= $ch | $RealCh  width= $RealWidth | 160 MHz centr= $RealCenter true"
+                $debug && echo "channel= $ch | $RealCh  width= $RealWidth | 160 MHz centr= $RealCenter true"
                 json_writer "$resFile" "add_element" "$ch" "$wdt" "$RealCenter"
                 break
             else
                 json_writer "$resFile" "add_element" "$ch" "$wdt" false
+                $debug && echo "channel= $ch | $RealCh  width= $RealWidth | 160 MHz centr= $RealCenter false"
 
             fi
-
             stopAP
         done
     done
 }
-
-
 
 testChannel(){
     sleep $delay
@@ -310,8 +303,6 @@ testChannel(){
                 test160MHz
             fi
     else
-
-
         if [[ $ch -gt 14 ]] 
         then
             hw_mode="a"
@@ -327,11 +318,7 @@ testChannel(){
             test20MHz
             test40MHz
         fi
-
-
-    fi
-
-    
+    fi 
 }
 
 json_writer() {
@@ -397,21 +384,31 @@ checkRoot(){
 checkParams(){
     # Флаги по умолчанию
     check6GHz=false
-
+    debug=false
     # Цикл обработки флагов
-    while getopts ":6h" opt
+    while getopts ":6hd" opt
     do
         case $opt in
             6)
             check6GHz=true
             ;;
 
+            d)
+            debug=true
+            ;;
+
             h)
             echo "Command [-6h] <interface> <file>"
             echo "-6 add check on 6GHz"
             echo "-h show this usage"
+            echo "-d debug message output"
+         
+
+
             exit 0
             ;;
+            
+
 
             \?)
             echo "Invalid option: -$OPTARG" >&2
@@ -468,7 +465,7 @@ checkInterface(){
 checkDepends(){
     if command -v jq &> /dev/null
     then
-        echo "jq is installed"
+        :
     else
         echo "jq is not installed"
         exit 1
