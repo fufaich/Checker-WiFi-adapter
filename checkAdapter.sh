@@ -141,6 +141,8 @@ startAP(){
         timer=$(($timer + 1))
         sleep 0.5
     done
+
+    $fileDebug && cat $tmp > "$ch"-"$wdt"MHz-"$mode6GHz".log
 }
 
 stopAP(){
@@ -385,8 +387,9 @@ checkParams(){
     # Флаги по умолчанию
     check6GHz=false
     debug=false
+    fileDebug=false
     # Цикл обработки флагов
-    while getopts ":6hd" opt
+    while getopts ":6hdf" opt
     do
         case $opt in
             6)
@@ -397,13 +400,16 @@ checkParams(){
             debug=true
             ;;
 
+            f)
+            fileDebug=true
+            ;;
+
             h)
             echo "Command [-6h] <interface> <file>"
             echo "-6 add check on 6GHz"
             echo "-h show this usage"
             echo "-d debug message output"
-         
-
+            echo "-f save file debug"
 
             exit 0
             ;;
