@@ -156,23 +156,27 @@ test20MHz(){
     startAP
 
     res=$(grep "AP-ENABLED" $tmp)
+    # cat $tmp > $ch-20MHz-$mode6GHz.log
+
     if [[ $res ]] 
         then
             echo "HT20[$ch] true"
+            json_writer "$resFile" "add_element" $ch "HT20" true
+
             stopAP 
             return 1
         else
             echo "HT20[$ch] false"
+            json_writer "$resFile" "add_element" $ch "HT20" false
             stopAP 
             return 0
     fi
 
-    # cat $tmp > $ch-20MHz-$mode6GHz.log
 
 }
 
 test40MHz(){
-    
+    res=0
     ht=("HT40+" "HT40-")
 
     for wdt in "${ht[@]}"
@@ -184,8 +188,12 @@ test40MHz(){
         if [[ $res ]] 
             then
                 echo "$wdt-[$ch] true"
+                json_writer "$resFile" "add_element" "$ch" "$wdt" true
+
             else
                 echo "$wdt-[$ch] false"
+                json_writer "$resFile" "add_element" "$ch" "$wdt" false
+
         fi
         # cat $tmp > "$ch-$wdt-$mode6GHz.log"
         stopAP
@@ -212,6 +220,8 @@ test80MHz(){
             if [[ $res ]] 
                 then
                     echo "channel= $ch 80MHz centr $centrWidth false"
+                    json_writer "$resFile" "add_element" "$ch" "$wdt" false
+
                     stopAP
                     continue
             fi
@@ -224,7 +234,11 @@ test80MHz(){
             if [[ "$ch" == "$RealCh" && "80" == "$RealWidth" ]]
             then
                 echo "channel= $ch | $RealCh  width= $RealWidth | 80MHz centr= $RealCenter true"
+                json_writer "$resFile" "add_element" "$ch" "$wdt" "$RealCenter"
                 break
+            else
+                json_writer "$resFile" "add_element" "$ch" "$wdt" false
+
             fi
 
             stopAP
@@ -254,8 +268,8 @@ test160MHz(){
             res=$(grep "AP-DISABLED" $tmp)
             if [[ $res ]] 
                 then
-                    echo "channel= $ch 80MHz centr $centrWidth false"
-                    # cat $tmp > "$ch-$wdt-$centrWidth-$mode6GHz.log"
+                    echo "channel= $ch 160MHz centr $centrWidth false"
+                    json_writer "$resFile" "add_element" "$ch" "$wdt" false
                     stopAP
                     continue
             fi
@@ -268,9 +282,13 @@ test160MHz(){
             if [[ "$ch" == "$RealCh" && "160" == "$RealWidth" ]]
             then
                 echo "channel= $ch | $RealCh  width= $RealWidth | 160 MHz centr= $RealCenter true"
+                json_writer "$resFile" "add_element" "$ch" "$wdt" "$RealCenter"
+                break
+            else
+                json_writer "$resFile" "add_element" "$ch" "$wdt" false
+
             fi
 
-            # cat $tmp > "$ch-$wdt-$mode6GHz.log"
             stopAP
         done
     done
@@ -292,6 +310,8 @@ testChannel(){
                 test160MHz
             fi
     else
+
+
         if [[ $ch -gt 14 ]] 
         then
             hw_mode="a"
@@ -307,44 +327,54 @@ testChannel(){
             test20MHz
             test40MHz
         fi
+
+
     fi
 
     
 }
 
-jsonWritter(){
+json_writer() {
+    local json_file="$1"
+    local action="$2"
+    local ch="$3"
+    local w="$4"
+    local res="$5"
+    local mode="2.4/5GHz"
 
-    
-
-    case $1 in
+    case "$action" in
         "start")
-            declare -A array24
-            declare -A array5
-            declare -A array6
-            json_object="{ "
+            echo "{\"2.4/5GHz\" : {}, \"6GHz\" : {}}" > "$json_file"
+
         ;;
 
-        "addCh")
-            json_object+="\"$ch\": "
+        "add_element")
+            if [[ $mode6GHz == 1 ]]
+            then
+                mode="6GHz"
+            else
+                mode="2.4/5GHz"
+            fi
+            jq -c ".[\"$mode\"][\"$ch\"] += {\"$w\" : \"$res\"}" "$json_file" > tmp.json && mv tmp.json "$json_file"
+            
         ;;
 
         "end")
-            echo "}" >> "$resFile"
-        
-        ;;
+            echo "JSON object saved to $json_file"
 
-        \?)
-            echo "Invalid option: -$OPTARG" >&2
-            exit 1
+        ;;
+        *)
+            echo "Invalid action: $action" >&2
+            return 1
         ;;
     esac
 }
 
 mainLoop(){
-    # for ch in "${array[@]}"
-    # do
-    #     testChannel
-    # done
+    for ch in "${array[@]}"
+    do
+        testChannel
+    done
 
     if [ $check6GHz ]
     then
@@ -435,15 +465,28 @@ checkInterface(){
     fi
 }
 
+checkDepends(){
+    if command -v jq &> /dev/null
+    then
+        echo "jq is installed"
+    else
+        echo "jq is not installed"
+        exit 1
+    fi
+
+    #todo сделать проверку на hostapd-noscan
+}
 ############################################################
 checkRoot
 checkParams "$@"
+checkDepends
 shift $((OPTIND-1))
 trap 'sigHandler' SIGINT
 nameInterface=$1
 resFile=$2
 delay=0.2
-checkInterface $nameInterface
+checkInterface "$nameInterface"
+
 
 
 tmpConfig=hostapdTmp.conf
@@ -452,12 +495,10 @@ mode6GHz=0
 countryCode=$(iw reg get | grep "country" | awk '{print $2}' | tr -d ':')
 
 getChannelsArrays
-ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null   
+ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null   #? 
 echo "Testing..." 
+json_writer "$resFile" "start"
 mainLoop
-# jsonWritter "start"
-# jsonWritter "end"
+json_writer "$resFile" "end"
 
-
-# jsonObject=${jsonObject%,} Удаляет последнюю запятую
 echo "Done" 
