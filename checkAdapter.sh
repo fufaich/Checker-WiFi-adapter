@@ -498,7 +498,7 @@ checkInterface "$nameInterface"
 tmpConfig=hostapdTmp.conf
 tmp="tmp.log"
 mode6GHz=0
-countryCode=$(iw reg get | grep "country" | awk '{print $2}' | tr -d ':')
+countryCode=$(iw reg get | grep "country" | awk '{print $2}' | tr -d ':' | awk '(NR==1)')
 
 getChannelsArrays
 ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null   #? 
