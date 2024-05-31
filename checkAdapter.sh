@@ -11,10 +11,10 @@ sigHandler(){
 getChannelsArrays(){
     iw phy$numPhy info | sed -n '/Band 4:/q;p' | grep 'MHz \[' | grep -v "(disabled)" | cut -d ' ' -f4 | grep -o '[0-9]*' > num
     mapfile -t array < num
-    rm num
+    # rm num
 
-    if [ $check6GHz ]
-    then
+    if [ "$check6GHz" == "true" ]; then
+        echo "DEBUG"
         iw phy$numPhy info | sed -n '/Band 4:/,${p;}' | grep 'MHz \[' | grep -v "(disabled)" | cut -d ' ' -f4 | grep -o '[0-9]*'> num
         mapfile -t array6GHz < num
         rm num
@@ -68,7 +68,7 @@ createConfig(){
             ;;
             "HT80-")
                 echo "op_class=132" >> $tmpConfig
-                echo "ht_capab=[HT40+]" >> $tmpConfig
+                echo "ht_capab=[HT40-]" >> $tmpConfig
                 echo "he_oper_chwidth=2" >> $tmpConfig
                 echo "he_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
             ;;
@@ -79,9 +79,9 @@ createConfig(){
                 echo "he_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
 
             ;;
-            "HT1600-")
+            "HT160-")
                 echo "op_class=134" >> $tmpConfig
-                echo "ht_capab=[HT40+]" >> $tmpConfig
+                echo "ht_capab=[HT40-]" >> $tmpConfig
                 echo "he_oper_chwidth=2" >> $tmpConfig
                 echo "he_oper_centr_freq_seg0_idx=$centrWidth" >> $tmpConfig
             ;;
@@ -133,7 +133,8 @@ createConfig(){
 }
 startAP(){
     local timer=0
-    ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null   
+    ps aux | grep hostapd | awk '{if($1  == "root"){ print $2}}' | xargs kill 2 2> /dev/null 
+    sleep $delay  
     hostapd $tmpConfig > $tmp &
     while [[ true ]] 
     do          
@@ -178,6 +179,7 @@ test20MHz(){
 
 test40MHz(){
     res=0
+    isAviable=0
     ht=("HT40+" "HT40-")
 
     for wdt in "${ht[@]}"
@@ -190,15 +192,14 @@ test40MHz(){
             then
                 $debug && echo "$wdt-[$ch] true"
                 json_writer "$resFile" "add_element" "$ch" "$wdt" true
-
+                isAviable=1
             else
                 $debug && echo "$wdt-[$ch] false"
                 json_writer "$resFile" "add_element" "$ch" "$wdt" false
-
         fi
-        # cat $tmp > "$ch-$wdt-$mode6GHz.log"
         stopAP
     done
+    return $isAviable
 }
 
 test80MHz(){
@@ -304,19 +305,26 @@ testChannel(){
             if [[ $? == 1 ]]
             then
                 test40MHz
-                test80MHz
-                test160MHz
+                if [[ $? == 1 ]]
+                then
+                    test80MHz
+                    test160MHz
+                fi
             fi
     else
-        if [[ $ch -gt 14 ]] 
+        if [[ $ch -gt 35 ]] 
         then
             hw_mode="a"
             test20MHz
             if [[ $? == 1 ]]
             then
                 test40MHz
-                test80MHz
-                test160MHz
+                if [[ $? == 1 ]]
+                then
+                    echo "DEBUG"
+                    test80MHz
+                    test160MHz
+                fi
             fi
         else
             hw_mode="g"
@@ -366,10 +374,12 @@ mainLoop(){
     for ch in "${array[@]}"
     do
         testChannel
+        echo "ch=$ch"
     done
-
-    if [ $check6GHz ]
+    
+    if [ "$check6GHz" == "true" ];
     then
+        echo "6Ghz test"
         mode6GHz=1
         for ch in "${array6GHz[@]}"
         do
